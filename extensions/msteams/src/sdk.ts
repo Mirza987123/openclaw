@@ -16,6 +16,13 @@ type TeamsSdkModules = {
  */
 export type MSTeamsApp = {
   send(conversationId: string, activity: unknown): Promise<{ id?: string }>;
+  /**
+   * Threaded variant of `send` for channel/groupchat replies. The SDK builds
+   * the threaded conversation id internally (`${conversationId};messageid=${messageId}`)
+   * via its `toThreadedConversationId` helper, so we don't have to reproduce
+   * Teams' URL format on our side.
+   */
+  reply(conversationId: string, messageId: string, activity: unknown): Promise<{ id?: string }>;
   on(event: string, cb: (...args: unknown[]) => unknown): unknown;
   initialize(): Promise<void>;
   tokenManager: {

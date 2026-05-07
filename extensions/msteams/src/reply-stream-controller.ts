@@ -82,6 +82,12 @@ export function createTeamsReplyStreamController(params: {
   let canceledLocally = false;
   let lastInformativeText = "";
   let progressLines: string[] = [];
+  // openclaw's reply pipeline calls onPartialReply with the cumulative text on
+  // each chunk, but the SDK's HttpStream appends each emit() to its internal
+  // text buffer (this.text += activity.text). Forwarding cumulative text into
+  // an appending sink produces "chunk1 + chunk2 + chunk3..." duplication. We
+  // track the length of text we've already emitted and forward only the delta.
+  let emittedTextLength = 0;
 
   const wasCanceled = () => canceledLocally || Boolean(stream?.canceled);
 
@@ -144,8 +150,19 @@ export function createTeamsReplyStreamController(params: {
       if (!stream || !payload.text || wasCanceled() || streamMode !== "partial") {
         return;
       }
+      // Convert cumulative-text from the pipeline into deltas for the SDK's
+      // appending sink. Without this, "Here's a" → "Here's a sonnet" → ...
+      // gets emitted as full repeats and the SDK concatenates the lot.
+      const fullText = payload.text;
+      // If the pipeline ever sends shorter text than we've emitted (e.g.
+      // edit-in-place semantics), skip rather than emit a negative slice.
+      if (fullText.length <= emittedTextLength) {
+        return;
+      }
+      const delta = fullText.slice(emittedTextLength);
       try {
-        stream.emit(payload.text);
+        stream.emit(delta);
+        emittedTextLength = fullText.length;
         tokensEmitted = true;
       } catch (err) {
         if (isStreamCancelledError(err)) {

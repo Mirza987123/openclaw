@@ -526,15 +526,14 @@ export async function sendMSTeamsMessages(params: {
   ): Promise<string[]> => {
     const baseRef = buildConversationReference(params.conversationRef);
     const isChannel = params.conversationRef.conversation?.conversationType === "channel";
-    // For Teams channels, reconstruct the threaded conversation ID so the
-    // proactive message lands in the correct thread instead of creating a
-    // new top-level post in the channel.
-    const conversationId =
+    // For Teams channels with a thread anchor, route via `app.reply` so the
+    // SDK builds the threaded conversation id (`${convId};messageid=${msgId}`)
+    // via its own `toThreadedConversationId` helper. Otherwise use `app.send`.
+    const sendFn =
       isChannel && threadActivityId
-        ? `${baseRef.conversation.id};messageid=${threadActivityId}`
-        : baseRef.conversation.id;
-
-    const sendFn = (activity: MSTeamsActivityLike) => params.app.send(conversationId, activity);
+        ? (activity: MSTeamsActivityLike) =>
+            params.app.reply(baseRef.conversation.id, threadActivityId, activity)
+        : (activity: MSTeamsActivityLike) => params.app.send(baseRef.conversation.id, activity);
     return await sendMessageBatchInContext(sendFn, batch, startIndex);
   };
 

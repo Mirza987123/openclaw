@@ -33,6 +33,34 @@ describe("createTeamsReplyStreamController", () => {
     expect(stream.emit).toHaveBeenCalledWith("hello");
   });
 
+  it("emits only the delta when openclaw sends cumulative text on each chunk", () => {
+    // openclaw's reply pipeline calls onPartialReply with the cumulative
+    // text-so-far on every chunk. The SDK's HttpStream APPENDS each emit() to
+    // its internal text buffer (this.text += activity.text). Without delta
+    // conversion, the SDK accumulates "chunk1 + chunk2 + chunk3" and the user
+    // sees the message duplicated on each progress update (real bug observed
+    // 2026-05-06: a sonnet rendered with each line repeated alongside the
+    // previous full state).
+    const stream = makeStream();
+    const ctrl = makeController({ stream });
+    ctrl.onPartialReply({ text: "Here's one for you:\nThe morning" });
+    ctrl.onPartialReply({ text: "Here's one for you:\nThe morning light" });
+    ctrl.onPartialReply({ text: "Here's one for you:\nThe morning light breaks" });
+    expect(stream.emit).toHaveBeenNthCalledWith(1, "Here's one for you:\nThe morning");
+    expect(stream.emit).toHaveBeenNthCalledWith(2, " light");
+    expect(stream.emit).toHaveBeenNthCalledWith(3, " breaks");
+  });
+
+  it("ignores duplicate or out-of-order partial replies that don't extend the text", () => {
+    const stream = makeStream();
+    const ctrl = makeController({ stream });
+    ctrl.onPartialReply({ text: "abcdef" });
+    ctrl.onPartialReply({ text: "abc" }); // shorter — could be edit-in-place semantics
+    ctrl.onPartialReply({ text: "abcdef" }); // back to known length
+    expect(stream.emit).toHaveBeenCalledTimes(1);
+    expect(stream.emit).toHaveBeenCalledWith("abcdef");
+  });
+
   it("sends informative update once on first onReplyStart", async () => {
     const stream = makeStream();
     const ctrl = makeController({ stream });

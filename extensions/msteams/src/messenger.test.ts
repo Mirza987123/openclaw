@@ -104,6 +104,16 @@ function createMockApp(opts?: MockAppOptions): MSTeamsApp {
       opts?.onClientCreated?.("", conversationId);
       return await createFn(activity);
     },
+    // Mirror the SDK's `app.reply` which internally calls
+    // `app.send(toThreadedConversationId(channelId, msgId), activity)`. The
+    // test capture sees the threaded conversationId so existing assertions
+    // continue to work after we switched messenger.ts from manual URL
+    // construction to `app.reply`.
+    reply: async (conversationId: string, messageId: string, activity: unknown) => {
+      const threaded = `${conversationId};messageid=${messageId}`;
+      opts?.onClientCreated?.("", threaded);
+      return await createFn(activity);
+    },
     api: {
       conversations: {
         activities: (conversationId: string) => {
