@@ -84,20 +84,28 @@ function renderGroup(group: ShortcutGroup) {
 
 function trapFocus(e: KeyboardEvent, el: HTMLElement) {
   if (e.key !== "Tab") return;
-  const focusable = Array.from(el.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR));
-  if (focusable.length === 0) return;
+  const focusable = [...el.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)].filter(
+    (node) => node.isConnected && node.tabIndex >= 0,
+  );
+  if (focusable.length === 0) {
+    e.preventDefault();
+    el.focus();
+    return;
+  }
+
+  const active = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   const first = focusable[0];
   const last = focusable[focusable.length - 1];
-  if (e.shiftKey) {
-    if (document.activeElement === first) {
-      e.preventDefault();
-      last.focus();
-    }
-  } else {
-    if (document.activeElement === last) {
-      e.preventDefault();
-      first.focus();
-    }
+  const focusInside = active ? focusable.includes(active) : false;
+
+  if (e.shiftKey && (!focusInside || active === first)) {
+    e.preventDefault();
+    last.focus();
+    return;
+  }
+  if (!e.shiftKey && (!focusInside || active === last)) {
+    e.preventDefault();
+    first.focus();
   }
 }
 
