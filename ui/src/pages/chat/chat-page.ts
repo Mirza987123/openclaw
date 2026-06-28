@@ -652,8 +652,10 @@ function resetChatStateForRouteSession(state: ChatPageHost, sessionKey: string) 
     resetChatSessionPickerState(state as never);
   }
   state.currentSessionId = null;
+  state.reconnectResumeSessionId = null;
   state.chatMessage = "";
   state.chatAttachments = [];
+  state.chatReplyTarget = null;
   state.chatMessages = restoreChatMessagesForSession(state, sessionKey);
   state.chatToolMessages = [];
   state.activityEntries = [];
@@ -661,6 +663,7 @@ function resetChatStateForRouteSession(state: ChatPageHost, sessionKey: string) 
   state.activityAtBottom = true;
   state.chatStreamSegments = [];
   state.chatThinkingLevel = null;
+  state.chatVerboseLevel = null;
   state.chatStream = null;
   state.chatSideResult = null;
   state.lastError = null;
