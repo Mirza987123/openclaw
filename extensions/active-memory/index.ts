@@ -3218,7 +3218,6 @@ async function runRecallSubagent(params: {
     channelId: params.channelId,
   });
 
-  let activeSessionFile = sessionFile;
   let harnessHasUsableMemoryResult = false;
   let harnessHasUnavailableMemorySearchResult = false;
   try {
@@ -3267,7 +3266,7 @@ async function runRecallSubagent(params: {
         harnessHasUnavailableMemorySearchResult ||= evidence.hasUnavailableMemorySearchResult;
       },
     });
-    activeSessionFile = readActiveMemorySessionFileFromRunResult(result) ?? sessionFile;
+    const activeSessionFile = readActiveMemorySessionFileFromRunResult(result) ?? sessionFile;
     transcriptSources = collectActiveMemoryTranscriptSources({
       artifactSessionFile: sessionFile,
       runtimeSource,
