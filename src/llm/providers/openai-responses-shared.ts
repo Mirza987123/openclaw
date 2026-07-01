@@ -19,6 +19,9 @@ import {
 } from "../../agents/openai-reasoning-effort.js";
 import {
   createFirstStreamEventAbortController,
+  getFirstStreamEventTimeoutHandler,
+  getFirstStreamEventTimeoutMs,
+  type FirstStreamEventInternalOptions,
   withFirstStreamEventTimeout,
 } from "../../agents/stream-first-event-timeout.js";
 import { stripSystemPromptCacheBoundary } from "../../agents/system-prompt-cache-boundary.js";
@@ -166,8 +169,6 @@ function resolveReplayableResponsesMessageId(params: {
 
 export interface OpenAIResponsesStreamOptions {
   serviceTier?: ResponseCreateParamsStreaming["service_tier"];
-  firstEventTimeoutMs?: number;
-  abortFirstEventStream?: (reason: Error) => void;
   resolveServiceTier?: (
     responseServiceTier: ResponseCreateParamsStreaming["service_tier"] | undefined,
     requestServiceTier: ResponseCreateParamsStreaming["service_tier"] | undefined,
@@ -210,7 +211,11 @@ type ResponsesStreamClient = {
 type ResponsesLifecycleStreamOptions = Pick<
   StreamOptions,
   "signal" | "timeoutMs" | "maxRetries" | "onPayload" | "onResponse"
-> & { firstEventTimeoutMs?: number };
+> &
+  FirstStreamEventInternalOptions;
+
+type OpenAIResponsesProcessStreamOptions = OpenAIResponsesStreamOptions &
+  FirstStreamEventInternalOptions;
 
 export type ResponsesReasoningEffort = "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
 
@@ -575,7 +580,7 @@ export async function runResponsesStreamLifecycle<TApi extends Api>(params: {
   options?: ResponsesLifecycleStreamOptions;
   createClient: () => ResponsesStreamClient;
   buildParams: () => ResponseCreateParamsStreaming;
-  processStreamOptions?: OpenAIResponsesStreamOptions;
+  processStreamOptions?: OpenAIResponsesProcessStreamOptions;
   formatError: (error: unknown) => string;
 }): Promise<void> {
   const { stream, model, output, options } = params;
@@ -602,14 +607,20 @@ export async function runResponsesStreamLifecycle<TApi extends Api>(params: {
     );
     stream.push({ type: "start", partial: output });
 
+    const firstEventTimeoutMs = getFirstStreamEventTimeoutMs(options);
+    const onFirstEventTimeout = getFirstStreamEventTimeoutHandler(options);
     const processStreamOptions =
-      params.processStreamOptions || options?.firstEventTimeoutMs !== undefined
+      params.processStreamOptions ||
+      firstEventTimeoutMs !== undefined ||
+      onFirstEventTimeout !== undefined
         ? {
             ...params.processStreamOptions,
             firstEventTimeoutMs:
-              params.processStreamOptions?.firstEventTimeoutMs ?? options?.firstEventTimeoutMs,
+              params.processStreamOptions?.firstEventTimeoutMs ?? firstEventTimeoutMs,
             abortFirstEventStream:
               params.processStreamOptions?.abortFirstEventStream ?? firstEventAbort.abort,
+            onFirstEventTimeout:
+              params.processStreamOptions?.onFirstEventTimeout ?? onFirstEventTimeout,
           }
         : undefined;
     await processResponsesStream(openaiStream, output, stream, model, processStreamOptions);
@@ -644,7 +655,7 @@ export async function processResponsesStream<TApi extends Api>(
   output: AssistantMessage,
   stream: AssistantMessageEventStream,
   model: Model<TApi>,
-  options?: OpenAIResponsesStreamOptions,
+  options?: OpenAIResponsesProcessStreamOptions,
 ): Promise<void> {
   let currentItem:
     | ResponseReasoningItem
@@ -691,6 +702,7 @@ export async function processResponsesStream<TApi extends Api>(
     timeoutMs: options?.firstEventTimeoutMs ?? 0,
     stage: "responses",
     abort: options?.abortFirstEventStream,
+    onTimeout: options?.onFirstEventTimeout,
     hint: "The provider may be stalled while parsing the tool payload; retry with a smaller tool surface or enable OPENCLAW_DEBUG_MODEL_PAYLOAD=tools to inspect exposed tools.",
   });
   for await (const event of guardedStream) {

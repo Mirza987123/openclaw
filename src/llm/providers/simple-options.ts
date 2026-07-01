@@ -7,7 +7,10 @@ import type {
   ThinkingLevel,
 } from "../types.js";
 
-type FirstEventStreamOptions = { firstEventTimeoutMs?: number };
+type FirstEventStreamOptions = {
+  firstEventTimeoutMs?: number;
+  onFirstEventTimeout?: (reason: Error) => void;
+};
 
 export function buildBaseOptions(
   model: Model,
@@ -31,6 +34,7 @@ export function buildBaseOptions(
     onResponse: options?.onResponse,
     timeoutMs: options?.timeoutMs,
     firstEventTimeoutMs: firstEventOptions?.firstEventTimeoutMs,
+    onFirstEventTimeout: firstEventOptions?.onFirstEventTimeout,
     maxRetries: options?.maxRetries,
     maxRetryDelayMs: options?.maxRetryDelayMs,
     metadata: options?.metadata,

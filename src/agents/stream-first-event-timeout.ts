@@ -10,6 +10,13 @@ export type FirstStreamEventTimeoutContext = {
   stage?: StreamStage;
   hint?: string;
   abort?: (reason: Error) => void;
+  onTimeout?: (reason: Error) => void;
+};
+
+export type FirstStreamEventInternalOptions = {
+  firstEventTimeoutMs?: number;
+  abortFirstEventStream?: (reason: Error) => void;
+  onFirstEventTimeout?: (reason: Error) => void;
 };
 
 export type FirstStreamEventAbortController = {
@@ -17,6 +24,16 @@ export type FirstStreamEventAbortController = {
   abort: (reason: Error) => void;
   dispose: () => void;
 };
+
+export function getFirstStreamEventTimeoutMs(options: unknown): number | undefined {
+  return (options as FirstStreamEventInternalOptions | undefined)?.firstEventTimeoutMs;
+}
+
+export function getFirstStreamEventTimeoutHandler(
+  options: unknown,
+): ((reason: Error) => void) | undefined {
+  return (options as FirstStreamEventInternalOptions | undefined)?.onFirstEventTimeout;
+}
 
 function formatOptionalField(name: string, value: string | undefined): string {
   return value ? ` ${name}=${value}` : "";
@@ -86,6 +103,7 @@ export function withFirstStreamEventTimeout<T>(
         const first = await new Promise<IteratorResult<T>>((resolve, reject) => {
           timer = setTimeout(() => {
             const timeoutError = createFirstStreamEventTimeoutError(timeoutContext);
+            timeoutContext.onTimeout?.(timeoutError);
             timeoutContext.abort?.(timeoutError);
             reject(timeoutError);
           }, timeoutMs);

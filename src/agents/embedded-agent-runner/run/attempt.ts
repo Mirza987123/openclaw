@@ -3173,11 +3173,15 @@ export async function runEmbeddedAttempt(
       if (firstEventTimeoutMs > 0) {
         const baseStreamFn = activeSession.agent.streamFn;
         activeSession.agent.streamFn = (model, context, options) => {
-          type FirstEventStreamOptions = { firstEventTimeoutMs?: number };
+          type FirstEventStreamOptions = {
+            firstEventTimeoutMs?: number;
+            onFirstEventTimeout?: (error: Error) => void;
+          };
           const optionsWithFirstEvent = options as FirstEventStreamOptions | undefined;
           return baseStreamFn(model, context, {
             ...options,
             firstEventTimeoutMs: optionsWithFirstEvent?.firstEventTimeoutMs ?? firstEventTimeoutMs,
+            onFirstEventTimeout: optionsWithFirstEvent?.onFirstEventTimeout ?? idleTimeoutTrigger,
           } as typeof options);
         };
       }

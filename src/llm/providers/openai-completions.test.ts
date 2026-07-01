@@ -14,7 +14,10 @@ type OpenAICompatibleChoice = Omit<DeepPartial<ChatCompletionChunk["choices"][nu
 type OpenAICompatibleChatCompletionChunk = Omit<DeepPartial<ChatCompletionChunk>, "choices"> & {
   choices?: OpenAICompatibleChoice[];
 };
-type FirstEventSimpleStreamOptions = SimpleStreamOptions & { firstEventTimeoutMs?: number };
+type FirstEventSimpleStreamOptions = SimpleStreamOptions & {
+  firstEventTimeoutMs?: number;
+  onFirstEventTimeout?: (reason: Error) => void;
+};
 
 const mockChunksRef: {
   chunks: OpenAICompatibleChatCompletionChunk[];
@@ -181,11 +184,13 @@ describe("OpenAI-compatible completions params", () => {
     vi.useFakeTimers();
     try {
       mockChunksRef.stream = createNeverYieldingStream();
+      const onFirstEventTimeout = vi.fn();
 
       const stream = streamOpenAICompletions(model, context, {
         apiKey: "sk-test",
         firstEventTimeoutMs: 5,
-      });
+        onFirstEventTimeout,
+      } as FirstEventSimpleStreamOptions);
       const resultPromise = stream.result();
 
       await vi.advanceTimersByTimeAsync(5);
@@ -202,6 +207,7 @@ describe("OpenAI-compatible completions params", () => {
         ?.signal;
       expect(signal?.aborted).toBe(true);
       expect(signal?.reason).toBeInstanceOf(Error);
+      expect(onFirstEventTimeout).toHaveBeenCalledWith(signal?.reason);
     } finally {
       vi.useRealTimers();
     }
@@ -215,6 +221,7 @@ describe("OpenAI-compatible completions params", () => {
       const simpleOptions: FirstEventSimpleStreamOptions = {
         apiKey: "sk-test",
         firstEventTimeoutMs: 5,
+        onFirstEventTimeout: vi.fn(),
       };
       const stream = streamSimpleOpenAICompletions(model, context, simpleOptions);
       const resultPromise = stream.result();
@@ -226,6 +233,7 @@ describe("OpenAI-compatible completions params", () => {
       expect(result.errorMessage).toMatch(
         /completions HTTP stream opened but did not deliver a first SSE event within 5ms/,
       );
+      expect(simpleOptions.onFirstEventTimeout).toHaveBeenCalledWith(expect.any(Error));
     } finally {
       vi.useRealTimers();
     }

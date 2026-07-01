@@ -420,6 +420,7 @@ describe("streamOpenAICodexResponses transport", () => {
       }
       vi.stubGlobal("fetch", fetchMock);
       vi.stubGlobal("WebSocket", OpenNoMessageWebSocket);
+      const onFirstEventTimeout = vi.fn();
 
       const stream = streamOpenAICodexResponses(model, context, {
         apiKey: createJwt({
@@ -428,6 +429,10 @@ describe("streamOpenAICodexResponses transport", () => {
           },
         }),
         firstEventTimeoutMs: 5,
+        onFirstEventTimeout,
+      } as Parameters<typeof streamOpenAICodexResponses>[2] & {
+        firstEventTimeoutMs: number;
+        onFirstEventTimeout: (reason: Error) => void;
       });
       const resultPromise = stream.result();
 
@@ -442,6 +447,7 @@ describe("streamOpenAICodexResponses transport", () => {
       expect(result.errorMessage).toMatch(
         /responses HTTP stream opened but did not deliver a first SSE event within 5ms/,
       );
+      expect(onFirstEventTimeout).toHaveBeenCalledWith(expect.any(Error));
     } finally {
       vi.useRealTimers();
     }

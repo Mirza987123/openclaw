@@ -773,11 +773,12 @@ describe("processResponsesStream", () => {
       let requestSignal: AbortSignal | undefined;
       const output = createAssistantOutput();
       const stream = new AssistantMessageEventStream();
+      const onFirstEventTimeout = vi.fn();
       const resultPromise = runResponsesStreamLifecycle({
         stream,
         model: nativeOpenAIModel,
         output,
-        options: { firstEventTimeoutMs: 5 },
+        options: { firstEventTimeoutMs: 5, onFirstEventTimeout },
         createClient: () => ({
           responses: {
             create: (_params, requestOptions) => {
@@ -801,6 +802,7 @@ describe("processResponsesStream", () => {
       expect(output.stopReason).toBe("error");
       expect(requestSignal?.aborted).toBe(true);
       expect(requestSignal?.reason).toBeInstanceOf(Error);
+      expect(onFirstEventTimeout).toHaveBeenCalledWith(requestSignal?.reason);
     } finally {
       vi.useRealTimers();
     }
@@ -812,12 +814,13 @@ describe("processResponsesStream", () => {
       const output = createAssistantOutput();
       const stream = new AssistantMessageEventStream();
       const abortFirstEventStream = vi.fn();
+      const onFirstEventTimeout = vi.fn();
       const resultPromise = processResponsesStream(
         createNeverYieldingResponsesStream(),
         output,
         stream,
         nativeOpenAIModel,
-        { firstEventTimeoutMs: 5, abortFirstEventStream },
+        { firstEventTimeoutMs: 5, abortFirstEventStream, onFirstEventTimeout },
       );
       const rejection = expect(resultPromise).rejects.toThrow(
         /responses HTTP stream opened but did not deliver a first SSE event within 5ms/,
@@ -827,6 +830,7 @@ describe("processResponsesStream", () => {
       await rejection;
       expect(abortFirstEventStream).toHaveBeenCalledTimes(1);
       expect(abortFirstEventStream.mock.calls[0]?.[0]).toBeInstanceOf(Error);
+      expect(onFirstEventTimeout).toHaveBeenCalledWith(abortFirstEventStream.mock.calls[0]?.[0]);
     } finally {
       vi.useRealTimers();
     }

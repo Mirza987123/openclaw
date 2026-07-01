@@ -91,9 +91,11 @@ describe("withFirstStreamEventTimeout", () => {
     vi.useFakeTimers();
     try {
       const abort = vi.fn();
+      const onTimeout = vi.fn();
       const stream = withFirstStreamEventTimeout(createNeverYieldingStream(), {
         timeoutMs: 5,
         abort,
+        onTimeout,
       });
       const iterator = stream[Symbol.asyncIterator]();
       const next = iterator.next().catch((error: unknown) => error);
@@ -102,6 +104,7 @@ describe("withFirstStreamEventTimeout", () => {
       const error = await next;
 
       expect(error).toBeInstanceOf(Error);
+      expect(onTimeout).toHaveBeenCalledWith(error);
       expect(abort).toHaveBeenCalledWith(error);
     } finally {
       vi.useRealTimers();

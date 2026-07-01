@@ -147,12 +147,13 @@ describe("openai transport stream", () => {
     try {
       const model = createAzureResponsesModel();
       const abortFirstEventStream = vi.fn();
+      const onFirstEventTimeout = vi.fn();
       const resultPromise = testing.processResponsesStream(
         neverYieldsStream(),
         createResponsesAssistantOutput(model),
         { push: vi.fn() },
         model,
-        { firstEventTimeoutMs: 5, abortFirstEventStream },
+        { firstEventTimeoutMs: 5, abortFirstEventStream, onFirstEventTimeout },
       );
       const rejection = expect(resultPromise).rejects.toThrow(
         /did not deliver a first SSE event within 5ms after streaming headers/,
@@ -162,6 +163,7 @@ describe("openai transport stream", () => {
       await rejection;
       expect(abortFirstEventStream).toHaveBeenCalledTimes(1);
       expect(abortFirstEventStream.mock.calls[0]?.[0]).toBeInstanceOf(Error);
+      expect(onFirstEventTimeout).toHaveBeenCalledWith(abortFirstEventStream.mock.calls[0]?.[0]);
     } finally {
       vi.useRealTimers();
     }
@@ -172,12 +174,13 @@ describe("openai transport stream", () => {
     try {
       const model = createDeepSeekCompletionsModel();
       const abortFirstEventStream = vi.fn();
+      const onFirstEventTimeout = vi.fn();
       const resultPromise = testing.processOpenAICompletionsStream(
         neverYieldsStream() as AsyncIterable<ChatCompletionChunk>,
         createAssistantOutput(model),
         model,
         { push: vi.fn() },
-        { firstEventTimeoutMs: 5, abortFirstEventStream },
+        { firstEventTimeoutMs: 5, abortFirstEventStream, onFirstEventTimeout },
       );
       const rejection = expect(resultPromise).rejects.toThrow(
         /did not deliver a first SSE event within 5ms after streaming headers/,
@@ -187,6 +190,7 @@ describe("openai transport stream", () => {
       await rejection;
       expect(abortFirstEventStream).toHaveBeenCalledTimes(1);
       expect(abortFirstEventStream.mock.calls[0]?.[0]).toBeInstanceOf(Error);
+      expect(onFirstEventTimeout).toHaveBeenCalledWith(abortFirstEventStream.mock.calls[0]?.[0]);
     } finally {
       vi.useRealTimers();
     }

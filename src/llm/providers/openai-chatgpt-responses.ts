@@ -25,7 +25,11 @@ import {
   resolveTimerTimeoutMs,
   clampTimerTimeoutMs,
 } from "@openclaw/normalization-core/number-coercion";
-import { createFirstStreamEventAbortController } from "../../agents/stream-first-event-timeout.js";
+import {
+  createFirstStreamEventAbortController,
+  getFirstStreamEventTimeoutHandler,
+  getFirstStreamEventTimeoutMs,
+} from "../../agents/stream-first-event-timeout.js";
 import { createSseByteGuard } from "../../agents/streaming-byte-guard.js";
 import { stripSystemPromptCacheBoundary } from "../../agents/system-prompt-cache-boundary.js";
 import { getEnvApiKey } from "../env-api-keys.js";
@@ -85,7 +89,6 @@ const CODEX_RESPONSE_STATUSES = new Set<CodexResponseStatus>([
 // ============================================================================
 
 export interface OpenAICodexResponsesOptions extends StreamOptions {
-  firstEventTimeoutMs?: number;
   reasoningEffort?: "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
   reasoningSummary?: "auto" | "concise" | "detailed" | "off" | "on" | null;
   serviceTier?: ResponseCreateParamsStreaming["service_tier"];
@@ -627,8 +630,9 @@ async function processStream(
 ): Promise<void> {
   await processResponsesStream(mapCodexEvents(parseSSE(response)), output, stream, model, {
     serviceTier: options?.serviceTier,
-    firstEventTimeoutMs: options?.firstEventTimeoutMs,
+    firstEventTimeoutMs: getFirstStreamEventTimeoutMs(options),
     abortFirstEventStream,
+    onFirstEventTimeout: getFirstStreamEventTimeoutHandler(options),
     resolveServiceTier: resolveCodexServiceTier,
     applyServiceTierPricing: (usage, serviceTier) =>
       applyServiceTierPricing(usage, serviceTier, model),
@@ -1509,8 +1513,9 @@ async function processWebSocketStream(
       model,
       {
         serviceTier: options?.serviceTier,
-        firstEventTimeoutMs: options?.firstEventTimeoutMs,
+        firstEventTimeoutMs: getFirstStreamEventTimeoutMs(options),
         abortFirstEventStream,
+        onFirstEventTimeout: getFirstStreamEventTimeoutHandler(options),
         resolveServiceTier: resolveCodexServiceTier,
         applyServiceTierPricing: (usage, serviceTier) =>
           applyServiceTierPricing(usage, serviceTier, model),
