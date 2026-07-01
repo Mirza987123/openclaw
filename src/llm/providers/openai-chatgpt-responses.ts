@@ -612,6 +612,7 @@ async function processStream(
 ): Promise<void> {
   await processResponsesStream(mapCodexEvents(parseSSE(response)), output, stream, model, {
     serviceTier: options?.serviceTier,
+    firstEventTimeoutMs: options?.firstEventTimeoutMs,
     resolveServiceTier: resolveCodexServiceTier,
     applyServiceTierPricing: (usage, serviceTier) =>
       applyServiceTierPricing(usage, serviceTier, model),

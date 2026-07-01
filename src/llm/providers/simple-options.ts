@@ -27,6 +27,7 @@ export function buildBaseOptions(
     onPayload: options?.onPayload,
     onResponse: options?.onResponse,
     timeoutMs: options?.timeoutMs,
+    firstEventTimeoutMs: options?.firstEventTimeoutMs,
     maxRetries: options?.maxRetries,
     maxRetryDelayMs: options?.maxRetryDelayMs,
     metadata: options?.metadata,

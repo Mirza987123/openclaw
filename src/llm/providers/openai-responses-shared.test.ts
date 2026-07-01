@@ -1,6 +1,6 @@
 // OpenAI Responses shared tests cover tool conversion and response item mapping.
 import type { Tool as OpenAIResponsesTool } from "openai/resources/responses/responses.js";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { SYSTEM_PROMPT_CACHE_BOUNDARY } from "../../agents/system-prompt-cache-boundary.js";
 import type { AssistantMessage, AssistantMessageEvent, Context, Model, Tool } from "../types.js";
 import { AssistantMessageEventStream } from "../utils/event-stream.js";
@@ -22,6 +22,18 @@ async function* streamResponsesEvents(
   for (const event of events) {
     yield event;
   }
+}
+
+function createNeverYieldingResponsesStream(): AsyncIterable<OpenAIResponsesStreamEvent> {
+  return {
+    [Symbol.asyncIterator]() {
+      return {
+        async next() {
+          return new Promise<IteratorResult<OpenAIResponsesStreamEvent>>(() => {});
+        },
+      };
+    },
+  };
 }
 
 function createCapturedAssistantMessageEventStream(): {
@@ -749,6 +761,29 @@ describe("convertResponsesMessages", () => {
 });
 
 describe("processResponsesStream", () => {
+  it("fails when streaming headers arrive but no first SSE event follows", async () => {
+    vi.useFakeTimers();
+    try {
+      const output = createAssistantOutput();
+      const stream = new AssistantMessageEventStream();
+      const resultPromise = processResponsesStream(
+        createNeverYieldingResponsesStream(),
+        output,
+        stream,
+        nativeOpenAIModel,
+        { firstEventTimeoutMs: 5 },
+      );
+      const rejection = expect(resultPromise).rejects.toThrow(
+        /responses HTTP stream opened but did not deliver a first SSE event within 5ms/,
+      );
+
+      await vi.advanceTimersByTimeAsync(5);
+      await rejection;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it.each([
     ["omits arguments", undefined],
     ["sends empty arguments", ""],

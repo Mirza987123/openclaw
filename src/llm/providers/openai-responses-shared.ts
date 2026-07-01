@@ -17,6 +17,7 @@ import {
   resolveOpenAIReasoningEffortForModel,
   supportsOpenAIReasoningEffort,
 } from "../../agents/openai-reasoning-effort.js";
+import { withFirstStreamEventTimeout } from "../../agents/stream-first-event-timeout.js";
 import { stripSystemPromptCacheBoundary } from "../../agents/system-prompt-cache-boundary.js";
 import {
   AZURE_RESPONSES_TEXT_CONTENT_PART_TYPE,
@@ -162,6 +163,7 @@ function resolveReplayableResponsesMessageId(params: {
 
 export interface OpenAIResponsesStreamOptions {
   serviceTier?: ResponseCreateParamsStreaming["service_tier"];
+  firstEventTimeoutMs?: number;
   resolveServiceTier?: (
     responseServiceTier: ResponseCreateParamsStreaming["service_tier"] | undefined,
     requestServiceTier: ResponseCreateParamsStreaming["service_tier"] | undefined,
@@ -204,7 +206,7 @@ type ResponsesStreamClient = {
 type ResponsesLifecycleStreamOptions = Pick<
   StreamOptions,
   "signal" | "timeoutMs" | "maxRetries" | "onPayload" | "onResponse"
->;
+> & { firstEventTimeoutMs?: number };
 
 export type ResponsesReasoningEffort = "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
 
@@ -591,7 +593,15 @@ export async function runResponsesStreamLifecycle<TApi extends Api>(params: {
     );
     stream.push({ type: "start", partial: output });
 
-    await processResponsesStream(openaiStream, output, stream, model, params.processStreamOptions);
+    const processStreamOptions =
+      params.processStreamOptions || options?.firstEventTimeoutMs !== undefined
+        ? {
+            ...params.processStreamOptions,
+            firstEventTimeoutMs:
+              params.processStreamOptions?.firstEventTimeoutMs ?? options?.firstEventTimeoutMs,
+          }
+        : undefined;
+    await processResponsesStream(openaiStream, output, stream, model, processStreamOptions);
 
     if (options?.signal?.aborted) {
       throw new Error("Request was aborted");
@@ -661,7 +671,15 @@ export async function processResponsesStream<TApi extends Api>(
     pendingMessageText = null;
   };
 
-  for await (const event of openaiStream) {
+  const guardedStream = withFirstStreamEventTimeout(openaiStream, {
+    provider: model.provider,
+    api: model.api,
+    model: model.id,
+    timeoutMs: options?.firstEventTimeoutMs ?? 0,
+    stage: "responses",
+    hint: "The provider may be stalled while parsing the tool payload; retry with a smaller tool surface or enable OPENCLAW_DEBUG_MODEL_PAYLOAD=tools to inspect exposed tools.",
+  });
+  for await (const event of guardedStream) {
     if (event.type === "response.created") {
       output.responseId = event.response.id;
     } else if (event.type === "response.output_item.added") {

@@ -195,6 +195,29 @@ describe("OpenAI-compatible completions params", () => {
     }
   });
 
+  it("carries the first-event timeout through the simple completions wrapper", async () => {
+    vi.useFakeTimers();
+    try {
+      mockChunksRef.stream = createNeverYieldingStream();
+
+      const stream = streamSimpleOpenAICompletions(model, context, {
+        apiKey: "sk-test",
+        firstEventTimeoutMs: 5,
+      });
+      const resultPromise = stream.result();
+
+      await vi.advanceTimersByTimeAsync(5);
+      const result = await resultPromise;
+
+      expect(result.stopReason).toBe("error");
+      expect(result.errorMessage).toMatch(
+        /completions HTTP stream opened but did not deliver a first SSE event within 5ms/,
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("skips unreadable schemas while preserving healthy official OpenAI tools", async () => {
     let capturedPayload: Record<string, unknown> | undefined;
     const stream = streamOpenAICompletions(
